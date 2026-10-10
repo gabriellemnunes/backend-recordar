@@ -39,7 +39,7 @@ app.use("/api/especialidades", especialidadeRoutes);
 app.use("/api/medicos", medicoRoutes);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-const frontend = path.join(__dirname, "../../frontend");
+const frontend = path.join(__dirname, "../../recordar.frontend/recordar/frontend");
 if (fs.existsSync(frontend)) app.use(express.static(frontend));
 
 app.use(notFound);

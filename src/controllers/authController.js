@@ -3,17 +3,16 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { formatUser } = require("../config/format");
 const { dataValida } = require("../config/datas");
-const { conferirEspecialidade, conferirClinicas } = require("../config/vinculos");
 
 function tokenFor(user) {
   return jwt.sign({ id: user._id.toString(), tipo: user.tipo }, process.env.JWT_SECRET, { expiresIn: "8h" });
 }
 
 async function register(req, res) {
-  const { tipo, email, senha, confirmar_senha, telefone } = req.body;
+  const { tipo = "paciente", email, senha, confirmar_senha, telefone, nome_paciente, data_nascimento } = req.body;
 
-  if (tipo !== "paciente" && tipo !== "medico") {
-    return res.status(400).json({ message: "tipo deve ser 'paciente' ou 'medico'." });
+  if (tipo !== "paciente") {
+    return res.status(403).json({ message: "Só pacientes criam a própria conta. O cadastro de médicos é feito pelo administrador." });
   }
   if (!email || !senha) {
     return res.status(400).json({ message: "email e senha são obrigatórios." });
@@ -24,38 +23,26 @@ async function register(req, res) {
   if (confirmar_senha !== undefined && confirmar_senha !== senha) {
     return res.status(400).json({ message: "As senhas não são iguais." });
   }
-
-  const dados = { tipo, email, telefone: telefone || "" };
-
-  if (tipo === "paciente") {
-    const { nome_paciente, data_nascimento } = req.body;
-    if (!nome_paciente || !data_nascimento) {
-      return res.status(400).json({ message: "nome_paciente e data_nascimento são obrigatórios." });
-    }
-    if (!dataValida(data_nascimento)) {
-      return res.status(400).json({ message: "data_nascimento deve estar no formato AAAA-MM-DD." });
-    }
-    dados.nome_usuario = nome_paciente;
-    dados.data_nascimento = data_nascimento;
-  } else {
-    const { nome_medico, crm, id_especialidade, clinicas } = req.body;
-    if (!nome_medico || !crm || !id_especialidade) {
-      return res.status(400).json({ message: "nome_medico, crm e id_especialidade são obrigatórios." });
-    }
-    dados.nome_usuario = nome_medico;
-    dados.crm = crm;
-    dados.especialidade = await conferirEspecialidade(id_especialidade);
-    dados.clinicas = await conferirClinicas(clinicas);
+  if (!nome_paciente || !data_nascimento) {
+    return res.status(400).json({ message: "nome_paciente e data_nascimento são obrigatórios." });
+  }
+  if (!dataValida(data_nascimento)) {
+    return res.status(400).json({ message: "data_nascimento deve estar no formato AAAA-MM-DD." });
   }
 
   const existe = await User.findOne({ email: String(email).toLowerCase().trim() });
   if (existe) return res.status(409).json({ message: "E-mail já cadastrado." });
 
-  dados.senha = await bcrypt.hash(String(senha), 10);
-  const criado = await User.create(dados);
-  const user = await User.findById(criado._id).populate("especialidade").populate("clinicas");
+  const user = await User.create({
+    tipo: "paciente",
+    nome_usuario: nome_paciente,
+    data_nascimento,
+    email,
+    telefone: telefone || "",
+    senha: await bcrypt.hash(String(senha), 10)
+  });
 
-  res.status(201).json({ message: "Conta criada com sucesso.", token: tokenFor(user), user: formatUser(user) });
+  res.status(201).json({ message: "Conta criada com sucesso.", token: tokenFor(user), user: formatUser(user, { comSaude: true }) });
 }
 
 async function login(req, res) {
@@ -70,10 +57,10 @@ async function login(req, res) {
     return res.status(401).json({ message: "E-mail ou senha inválidos." });
   }
   if (tipo && tipo !== user.tipo) {
-    return res.status(403).json({ message: "Esta conta não pertence a esta área do aplicativo." });
+    return res.status(403).json({ message: "Esta conta não é deste acesso. Use os botões Entrar como paciente, médico ou administrador." });
   }
 
-  res.json({ message: "Login realizado com sucesso.", token: tokenFor(user), user: formatUser(user) });
+  res.json({ message: "Login realizado com sucesso.", token: tokenFor(user), user: formatUser(user, { comSaude: true }) });
 }
 
 async function recuperarSenha(req, res) {

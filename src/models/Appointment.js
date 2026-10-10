@@ -11,9 +11,10 @@ const appointmentSchema = new mongoose.Schema({
   queixa_principal: { type: String, default: "" },
   sintomas: { type: String, default: "" },
   inicio_sintomas: { type: String, default: "" },
-  condicoes_saude: { type: String, default: "" },
-  alergias: { type: String, default: "" },
-  medicamentos_em_uso: { type: String, default: "" }
+
+  aviso_troca: { type: Boolean, default: false },
+  troca_data_anterior: { type: String, default: "" },
+  troca_horario_anterior: { type: String, default: "" }
 }, { timestamps: true });
 
 appointmentSchema.index({ medico: 1, data_consulta: 1, horario_consulta: 1 }, { unique: true });

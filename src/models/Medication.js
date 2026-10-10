@@ -7,6 +7,9 @@ const medicationSchema = new mongoose.Schema({
   nome_remedio: { type: String, required: true, trim: true },
   horario_remedio: { type: String, required: true },
   quantidade_remedio: { type: String, required: true, trim: true },
+  data_inicio: { type: String, default: null },
+  data_fim: { type: String, default: null },
+  dias_tomados: { type: [String], default: [] },
   tomado_em: { type: String, default: null }
 }, { timestamps: true });
 

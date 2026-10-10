@@ -11,8 +11,9 @@ const comVinculos = (query) => query.populate("especialidade").populate("clinica
 
 const ANAMNESE_VAZIA = {
   queixa_principal: "", sintomas: "", inicio_sintomas: "",
-  condicoes_saude: "", alergias: "", medicamentos_em_uso: ""
+  aviso_troca: false, troca_data_anterior: "", troca_horario_anterior: ""
 };
+const CAMPOS_SAUDE = ["condicoes_saude", "alergias", "medicamentos_em_uso"];
 
 async function excluirContaEmCascata(user) {
   if (user.tipo === "paciente") {
@@ -30,7 +31,70 @@ async function excluirContaEmCascata(user) {
 }
 
 async function me(req, res) {
-  res.json(formatUser(req.user.doc));
+  res.json(formatUser(req.user.doc, { comSaude: true }));
+}
+
+function conferirSenha(senha, confirmar_senha) {
+  if (String(senha).length < 6) return "A senha precisa ter pelo menos 6 caracteres.";
+  if (confirmar_senha !== undefined && confirmar_senha !== senha) return "As senhas não são iguais.";
+  return null;
+}
+
+async function criarAdministrador(req, res) {
+  const { nome_administrador, email, senha, confirmar_senha, telefone } = req.body;
+  if (!nome_administrador) {
+    return res.status(400).json({ message: "nome_administrador é obrigatório." });
+  }
+  if (!email || !senha) {
+    return res.status(400).json({ message: "email e senha são obrigatórios." });
+  }
+  const erroSenha = conferirSenha(senha, confirmar_senha);
+  if (erroSenha) return res.status(400).json({ message: erroSenha });
+
+  const existe = await User.findOne({ email: String(email).toLowerCase().trim() });
+  if (existe) return res.status(409).json({ message: "E-mail já cadastrado." });
+
+  const user = await User.create({
+    tipo: "administrador",
+    nome_usuario: nome_administrador,
+    email,
+    telefone: telefone || "",
+    senha: await bcrypt.hash(String(senha), 10)
+  });
+  res.status(201).json(formatUser(user));
+}
+
+async function create(req, res) {
+  if (req.body.tipo === "administrador") return criarAdministrador(req, res);
+  const { nome_medico, crm, id_especialidade, clinicas, email, senha, confirmar_senha, telefone } = req.body;
+
+  if (!nome_medico || !crm || !id_especialidade) {
+    return res.status(400).json({ message: "nome_medico, crm e id_especialidade são obrigatórios." });
+  }
+  if (!email || !senha) {
+    return res.status(400).json({ message: "email e senha são obrigatórios." });
+  }
+  const erroSenha = conferirSenha(senha, confirmar_senha);
+  if (erroSenha) return res.status(400).json({ message: erroSenha });
+
+  const especialidade = await conferirEspecialidade(id_especialidade);
+  const listaClinicas = await conferirClinicas(clinicas);
+
+  const existe = await User.findOne({ email: String(email).toLowerCase().trim() });
+  if (existe) return res.status(409).json({ message: "E-mail já cadastrado." });
+
+  const criado = await User.create({
+    tipo: "medico",
+    nome_usuario: nome_medico,
+    crm,
+    especialidade,
+    clinicas: listaClinicas,
+    email,
+    telefone: telefone || "",
+    senha: await bcrypt.hash(String(senha), 10)
+  });
+  const user = await comVinculos(User.findById(criado._id));
+  res.status(201).json(formatUser(user));
 }
 
 async function aplicarEdicao(user, b, { podeTrocarSenha }) {
@@ -48,6 +112,12 @@ async function aplicarEdicao(user, b, { podeTrocarSenha }) {
     if (b.data_nascimento !== undefined) {
       if (!dataValida(b.data_nascimento)) throw erroHttp(400, "data_nascimento deve estar no formato AAAA-MM-DD.");
       user.data_nascimento = b.data_nascimento;
+    }
+    if (podeTrocarSenha && CAMPOS_SAUDE.some((campo) => b[campo] !== undefined)) {
+      for (const campo of CAMPOS_SAUDE) {
+        if (b[campo] !== undefined) user[campo] = String(b[campo] ?? "").trim();
+      }
+      user.anamnese_preenchida = true;
     }
   }
 
@@ -82,7 +152,7 @@ async function aplicarEdicao(user, b, { podeTrocarSenha }) {
 
 async function updateMe(req, res) {
   const user = await aplicarEdicao(req.user.doc, req.body, { podeTrocarSenha: true });
-  res.json(formatUser(user));
+  res.json(formatUser(user, { comSaude: true }));
 }
 
 async function removeMe(req, res) {
@@ -95,7 +165,7 @@ async function removeMe(req, res) {
 
 async function list(req, res) {
   const filtro = { tipo: { $in: ["paciente", "medico"] } };
-  if (req.query.tipo === "paciente" || req.query.tipo === "medico") filtro.tipo = req.query.tipo;
+  if (["paciente", "medico", "administrador"].includes(req.query.tipo)) filtro.tipo = req.query.tipo;
   if (req.query.busca) {
     filtro.nome_usuario = buscaPorTexto(req.query.busca);
   }
@@ -135,11 +205,11 @@ async function listMedicos(req, res) {
 async function remove(req, res) {
   const user = await User.findById(req.params.id);
   if (!user) return res.status(404).json({ message: "Usuário não encontrado." });
-  if (user.tipo === "administrador") {
-    return res.status(403).json({ message: "Contas de administrador não podem ser deletadas pelo aplicativo." });
+  if (String(user._id) === req.user.id) {
+    return res.status(403).json({ message: "Você não pode deletar a sua própria conta por aqui." });
   }
   await excluirContaEmCascata(user);
   res.json({ message: "Usuário deletado com sucesso." });
 }
 
-module.exports = { me, updateMe, removeMe, list, getById, update, listMedicos, remove };
+module.exports = { me, updateMe, removeMe, create, list, getById, update, listMedicos, remove };

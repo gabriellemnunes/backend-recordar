@@ -2,12 +2,12 @@ const swaggerSpec = {
   "openapi": "3.0.0",
   "info": {
     "title": "Recordar API",
-    "version": "3.0.0",
+    "version": "4.2.0",
     "description": "API acadêmica da plataforma Recordar: clínicas, especialidades, médicos, pacientes, consultas e remédios."
   },
   "servers": [
     {
-      "url": "http://localhost:3000"
+      "url": "/"
     }
   ],
   "components": {
@@ -59,7 +59,6 @@ const swaggerSpec = {
       "MedicoInput": {
         "type": "object",
         "required": [
-          "tipo",
           "nome_medico",
           "crm",
           "id_especialidade",
@@ -67,12 +66,6 @@ const swaggerSpec = {
           "senha"
         ],
         "properties": {
-          "tipo": {
-            "type": "string",
-            "enum": [
-              "medico"
-            ]
-          },
           "nome_medico": {
             "type": "string"
           },
@@ -137,8 +130,14 @@ const swaggerSpec = {
             "type": "string"
           },
           "inicio_sintomas": {
-            "type": "string"
-          },
+            "type": "string",
+            "example": "2026-09-28"
+          }
+        }
+      },
+      "AnamneseGeral": {
+        "type": "object",
+        "properties": {
           "condicoes_saude": {
             "type": "string"
           },
@@ -146,6 +145,39 @@ const swaggerSpec = {
             "type": "string"
           },
           "medicamentos_em_uso": {
+            "type": "string"
+          }
+        }
+      },
+      "AdministradorInput": {
+        "type": "object",
+        "required": [
+          "tipo",
+          "nome_administrador",
+          "email",
+          "senha"
+        ],
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "administrador"
+            ]
+          },
+          "nome_administrador": {
+            "type": "string"
+          },
+          "telefone": {
+            "type": "string",
+            "example": "(81) 98888-7777"
+          },
+          "email": {
+            "type": "string"
+          },
+          "senha": {
+            "type": "string"
+          },
+          "confirmar_senha": {
             "type": "string"
           }
         }
@@ -163,21 +195,14 @@ const swaggerSpec = {
         "tags": [
           "Auth"
         ],
-        "summary": "Cria conta de paciente ou de médico e já devolve o token",
+        "summary": "Cria conta de paciente e já devolve o token (médicos são cadastrados pelo administrador)",
         "security": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/PacienteInput"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MedicoInput"
-                  }
-                ]
+                "$ref": "#/components/schemas/PacienteInput"
               }
             }
           }
@@ -185,6 +210,9 @@ const swaggerSpec = {
         "responses": {
           "201": {
             "description": "Conta criada"
+          },
+          "403": {
+            "description": "Só pacientes criam a própria conta"
           },
           "409": {
             "description": "E-mail já cadastrado"
@@ -197,7 +225,7 @@ const swaggerSpec = {
         "tags": [
           "Auth"
         ],
-        "summary": "Realiza login",
+        "summary": "Realiza login. O aplicativo envia o tipo da aba escolhida (paciente, medico ou administrador)",
         "security": [],
         "requestBody": {
           "required": true,
@@ -304,7 +332,7 @@ const swaggerSpec = {
         "tags": [
           "Remédios"
         ],
-        "summary": "Paciente marca ou desmarca o remédio como tomado hoje",
+        "summary": "Paciente marca ou desmarca o remédio como tomado em um dia (hoje, se dia não for enviado). Só vale dentro do período do remédio",
         "parameters": [
           {
             "in": "path",
@@ -324,6 +352,11 @@ const swaggerSpec = {
                   "tomado": {
                     "type": "boolean",
                     "example": true
+                  },
+                  "dia": {
+                    "type": "string",
+                    "example": "2026-10-10",
+                    "description": "Opcional. Padrão: hoje"
                   }
                 }
               }
@@ -332,8 +365,10 @@ const swaggerSpec = {
         },
         "responses": {
           "200": {
-            "description": "Remédio atualizado",
-            "com tomado_hoje": null
+            "description": "Remédio atualizado, com tomado_hoje"
+          },
+          "400": {
+            "description": "Dia inválido ou fora do período do remédio"
           }
         }
       }
@@ -404,7 +439,8 @@ const swaggerSpec = {
           "200": {
             "description": "Conta atualizada"
           }
-        }
+        },
+        "description": "Paciente também pode enviar a anamnese geral: condicoes_saude, alergias e medicamentos_em_uso."
       },
       "delete": {
         "tags": [
@@ -423,7 +459,7 @@ const swaggerSpec = {
         "tags": [
           "Users"
         ],
-        "summary": "Lista pacientes e médicos (administrador)",
+        "summary": "Lista pacientes, médicos ou administradores (administrador)",
         "parameters": [
           {
             "in": "query",
@@ -432,9 +468,11 @@ const swaggerSpec = {
               "type": "string",
               "enum": [
                 "paciente",
-                "medico"
+                "medico",
+                "administrador"
               ]
-            }
+            },
+            "description": "Sem tipo, lista pacientes e médicos"
           },
           {
             "in": "query",
@@ -448,6 +486,40 @@ const swaggerSpec = {
         "responses": {
           "200": {
             "description": "Lista de usuários"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Administrador cadastra um médico ou outro administrador (tipo: administrador)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/MedicoInput"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AdministradorInput"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Médico ou administrador cadastrado"
+          },
+          "400": {
+            "description": "Dado faltando ou inválido"
+          },
+          "409": {
+            "description": "E-mail já cadastrado"
           }
         }
       }
@@ -531,7 +603,7 @@ const swaggerSpec = {
         "tags": [
           "Users"
         ],
-        "summary": "Deleta um paciente ou médico (administrador)",
+        "summary": "Apaga um paciente, médico ou outro administrador (não apaga a própria conta)",
         "parameters": [
           {
             "in": "path",
@@ -578,7 +650,7 @@ const swaggerSpec = {
         "tags": [
           "Consultas"
         ],
-        "summary": "Médico cria uma consulta disponível",
+        "summary": "Médico cria um ou vários horários de consulta no mesmo dia",
         "requestBody": {
           "required": true,
           "content": {
@@ -588,7 +660,7 @@ const swaggerSpec = {
                 "required": [
                   "id_clinica",
                   "data_consulta",
-                  "horario_consulta"
+                  "horarios"
                 ],
                 "properties": {
                   "id_clinica": {
@@ -599,9 +671,17 @@ const swaggerSpec = {
                     "type": "string",
                     "example": "2026-10-20"
                   },
-                  "horario_consulta": {
-                    "type": "string",
-                    "example": "14:30"
+                  "horarios": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "08:00",
+                      "08:30",
+                      "09:00"
+                    ],
+                    "description": "Horários que ficam disponíveis. Os que já existem são ignorados."
                   }
                 }
               }
@@ -610,10 +690,13 @@ const swaggerSpec = {
         },
         "responses": {
           "201": {
-            "description": "Consulta criada"
+            "description": "Horários criados (consultas e horarios_repetidos)"
+          },
+          "400": {
+            "description": "Dado faltando ou inválido"
           },
           "409": {
-            "description": "Já existe consulta nesse dia e horário"
+            "description": "Todos os horários enviados já existiam"
           }
         }
       }
@@ -656,6 +739,14 @@ const swaggerSpec = {
               "type": "string"
             },
             "description": "AAAA-MM-DD"
+          },
+          {
+            "in": "query",
+            "name": "nome",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Parte do nome do profissional"
           }
         ],
         "responses": {
@@ -670,7 +761,7 @@ const swaggerSpec = {
         "tags": [
           "Consultas"
         ],
-        "summary": "Pacientes com consulta agendada com o médico logado",
+        "summary": "Pacientes do médico logado: os com consulta agendada e, depois, os sem consulta agendada que ainda têm algum remédio dele que não terminou (id_consulta null). Saem da lista quando a data final de todos os remédios passa. Cada item traz total_remedios e remedios_ativos",
         "parameters": [
           {
             "in": "query",
@@ -736,7 +827,7 @@ const swaggerSpec = {
         "tags": [
           "Consultas"
         ],
-        "summary": "Paciente marca a consulta enviando a anamnese",
+        "summary": "Paciente marca a consulta enviando a anamnese da consulta",
         "parameters": [
           {
             "in": "path",
@@ -762,7 +853,110 @@ const swaggerSpec = {
             "description": "Consulta agendada"
           },
           "409": {
-            "description": "Consulta não está mais disponível"
+            "description": "Consulta indisponível, ou o paciente já tem consulta com o profissional nesse dia"
+          }
+        }
+      }
+    },
+    "/api/consultas/{id}/trocar": {
+      "put": {
+        "tags": [
+          "Consultas"
+        ],
+        "summary": "Paciente troca o horário da consulta por outro horário livre do mesmo médico",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "id_nova"
+                ],
+                "properties": {
+                  "id_nova": {
+                    "type": "string",
+                    "description": "ID do horário livre escolhido"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Horário trocado; a anamnese e os remédios acompanham a consulta e o médico recebe um aviso"
+          },
+          "404": {
+            "description": "Consulta não encontrada"
+          },
+          "409": {
+            "description": "Horário não está mais disponível"
+          }
+        }
+      }
+    },
+    "/api/consultas/{id}/aviso-visto": {
+      "put": {
+        "tags": [
+          "Consultas"
+        ],
+        "summary": "Médico marca como visto o aviso de troca de horário",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aviso marcado como visto"
+          },
+          "404": {
+            "description": "Consulta não encontrada"
+          }
+        }
+      }
+    },
+    "/api/consultas/{id}/realizada": {
+      "put": {
+        "tags": [
+          "Consultas"
+        ],
+        "summary": "Médico marca a consulta agendada como realizada (a consulta é apagada; os remédios continuam com o paciente)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consulta realizada"
+          },
+          "400": {
+            "description": "A consulta não está agendada"
+          },
+          "404": {
+            "description": "Consulta não encontrada"
           }
         }
       }
@@ -795,7 +989,7 @@ const swaggerSpec = {
         "tags": [
           "Remédios"
         ],
-        "summary": "Lista remédios (paciente vê os dele, médico vê os que receitou, administrador vê todos)",
+        "summary": "Lista remédios (paciente vê os dele, médico vê os que receitou, administrador vê todos). Com ?dia= devolve só os que estão no período de uso nesse dia (Agenda do dia). O médico pode usar ?paciente= para ver todos os remédios que receitou para um paciente, inclusive de consultas já realizadas",
         "parameters": [
           {
             "in": "query",
@@ -810,6 +1004,15 @@ const swaggerSpec = {
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "dia",
+            "description": "AAAA-MM-DD. Filtra os remédios em uso nesse dia; tomado_hoje passa a valer para esse dia",
+            "schema": {
+              "type": "string",
+              "example": "2026-10-10"
+            }
           }
         ],
         "responses": {
@@ -822,7 +1025,7 @@ const swaggerSpec = {
         "tags": [
           "Remédios"
         ],
-        "summary": "Médico receita um remédio em uma consulta agendada",
+        "summary": "Médico receita um remédio em uma consulta agendada, com o período de uso (data_inicio e data_fim)",
         "requestBody": {
           "required": true,
           "content": {
@@ -833,7 +1036,9 @@ const swaggerSpec = {
                   "id_consulta",
                   "nome_remedio",
                   "horario_remedio",
-                  "quantidade_remedio"
+                  "quantidade_remedio",
+                  "data_inicio",
+                  "data_fim"
                 ],
                 "properties": {
                   "id_consulta": {
@@ -850,6 +1055,16 @@ const swaggerSpec = {
                   "quantidade_remedio": {
                     "type": "string",
                     "example": "1 comprimido"
+                  },
+                  "data_inicio": {
+                    "type": "string",
+                    "example": "2026-10-10",
+                    "description": "Primeiro dia em que o paciente toma o remédio"
+                  },
+                  "data_fim": {
+                    "type": "string",
+                    "example": "2026-10-12",
+                    "description": "Último dia em que o paciente toma o remédio (não pode ser antes de data_inicio)"
                   }
                 }
               }
@@ -893,6 +1108,14 @@ const swaggerSpec = {
                   },
                   "quantidade_remedio": {
                     "type": "string"
+                  },
+                  "data_inicio": {
+                    "type": "string",
+                    "example": "2026-10-10"
+                  },
+                  "data_fim": {
+                    "type": "string",
+                    "example": "2026-10-15"
                   }
                 }
               }

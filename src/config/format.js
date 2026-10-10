@@ -28,10 +28,22 @@ function formatMedicoPublico(u) {
   };
 }
 
-function formatUser(u) {
+function formatUser(u, { comSaude = false } = {}) {
   const base = { id: u._id, tipo: u.tipo, email: u.email, telefone: u.telefone };
   if (u.tipo === "paciente") {
-    return { ...base, nome_paciente: u.nome_usuario, data_nascimento: u.data_nascimento, idade: calcularIdade(u.data_nascimento) };
+    const paciente = {
+      ...base,
+      nome_paciente: u.nome_usuario,
+      data_nascimento: u.data_nascimento,
+      idade: calcularIdade(u.data_nascimento),
+      anamnese_preenchida: !!u.anamnese_preenchida
+    };
+    if (comSaude) {
+      paciente.condicoes_saude = u.condicoes_saude || "";
+      paciente.alergias = u.alergias || "";
+      paciente.medicamentos_em_uso = u.medicamentos_em_uso || "";
+    }
+    return paciente;
   }
   if (u.tipo === "medico") {
     const { id, ...medico } = formatMedicoPublico(u);
@@ -55,33 +67,48 @@ function formatConsulta(c, { comAnamnese = false } = {}) {
     endereco_clinica: cl ? cl.endereco_clinica : null,
     id_medico: m ? m._id : null,
     nome_medico: m ? m.nome_usuario : null,
+    crm_medico: m ? m.crm : null,
     nome_especialidade: esp ? esp.nome_especialidade : null,
     id_paciente: p ? p._id : null,
     nome_paciente: p ? p.nome_usuario : null,
     idade_paciente: p ? calcularIdade(p.data_nascimento) : null,
     telefone_paciente: p ? p.telefone : null,
-    email_paciente: p ? p.email : null
+    email_paciente: p ? p.email : null,
+    aviso_troca: c.aviso_troca
+      ? { data_anterior: c.troca_data_anterior, horario_anterior: c.troca_horario_anterior }
+      : null
   };
   if (comAnamnese) {
     saida.anamnese = {
       queixa_principal: c.queixa_principal,
       sintomas: c.sintomas,
-      inicio_sintomas: c.inicio_sintomas,
-      condicoes_saude: c.condicoes_saude,
-      alergias: c.alergias,
-      medicamentos_em_uso: c.medicamentos_em_uso
+      inicio_sintomas: c.inicio_sintomas
+    };
+    saida.anamnese_geral = {
+      condicoes_saude: p ? p.condicoes_saude || "" : "",
+      alergias: p ? p.alergias || "" : "",
+      medicamentos_em_uso: p ? p.medicamentos_em_uso || "" : ""
     };
   }
   return saida;
 }
 
-function formatRemedio(r) {
+function situacaoRemedio(r, dia = hoje()) {
+  if (r.data_inicio && dia < r.data_inicio) return "futuro";
+  if (r.data_fim && dia > r.data_fim) return "encerrado";
+  return "em_uso";
+}
+
+function formatRemedio(r, dia = hoje()) {
   return {
     id: r._id,
     nome_remedio: r.nome_remedio,
     horario_remedio: r.horario_remedio,
     quantidade_remedio: r.quantidade_remedio,
-    tomado_hoje: r.tomado_em === hoje(),
+    data_inicio: r.data_inicio || null,
+    data_fim: r.data_fim || null,
+    situacao: situacaoRemedio(r),
+    tomado_hoje: (r.dias_tomados || []).includes(dia) || r.tomado_em === dia,
     id_consulta: r.consulta,
     id_medico: r.medico ? r.medico._id : null,
     nome_medico: r.medico ? r.medico.nome_usuario : null,
@@ -90,4 +117,4 @@ function formatRemedio(r) {
   };
 }
 
-module.exports = { formatUser, formatMedicoPublico, formatConsulta, formatRemedio, formatClinica, formatEspecialidade };
+module.exports = { situacaoRemedio, formatUser, formatMedicoPublico, formatConsulta, formatRemedio, formatClinica, formatEspecialidade };

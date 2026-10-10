@@ -8,6 +8,10 @@ const userSchema = new mongoose.Schema({
   telefone: { type: String, default: "", trim: true },
 
   data_nascimento: { type: String, default: null },
+  anamnese_preenchida: { type: Boolean, default: false },
+  condicoes_saude: { type: String, default: "" },
+  alergias: { type: String, default: "" },
+  medicamentos_em_uso: { type: String, default: "" },
 
   crm: { type: String, default: null, trim: true },
   especialidade: { type: mongoose.Schema.Types.ObjectId, ref: "Specialty", default: null },
